@@ -1,0 +1,1 @@
+export type ID=string;export interface PromoCode{id:ID;code:string;percent?:number;amount?:number;active:boolean}export interface DiscountRule{id:ID;name:string;percent:number;active:boolean}export interface PriceType{id:ID;name:string}

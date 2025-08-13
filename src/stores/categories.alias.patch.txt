@@ -1,0 +1,21 @@
+// patch for src/stores/categories.ts — add to actions{}
+load(){
+  const self:any = this as any
+  if (typeof self.fetch === 'function') return self.fetch()
+  if (typeof self.fetchAll === 'function') return self.fetchAll()
+  if (typeof self.init === 'function') return self.init()
+  if (typeof self.loadTree === 'function') return self.loadTree()
+  if (typeof self.refresh === 'function') return self.refresh()
+},
+updateField(payload:any){
+  const self:any = this as any
+  if (typeof self.patch === 'function') return self.patch(payload)
+  if (typeof self.update === 'function') return self.update(payload)
+  if (typeof self.save === 'function') return self.save(payload)
+},
+saveCategory(model:any){
+  const self:any = this as any
+  if (typeof self.save === 'function') return self.save(model)
+  if (typeof self.update === 'function') return self.update(model)
+  if (typeof self.patch === 'function') return self.patch(model)
+},

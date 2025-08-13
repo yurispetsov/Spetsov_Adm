@@ -1,0 +1,1 @@
+export type ID=string;export interface User{id:ID;name:string;email:string;role:string;lastLoginAt?:string;online?:boolean}export interface Permissions{[page:string]:{read:boolean;write:boolean}}export interface RoleTemplate{id:ID;name:string;perms:Permissions}

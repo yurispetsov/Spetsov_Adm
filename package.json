@@ -1,0 +1,47 @@
+{
+  "name": "spetsovadm-admin-mvp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest --run",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed",
+    "e2e:install": "playwright install --with-deps"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "pinia": "^2.2.6",
+    "vue": "^3.5.10",
+    "vue-router": "^4.4.5",
+    "zod": "^3.23.8",
+    "vee-validate": "^4.13.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@vitejs/plugin-vue": "^5.1.2",
+    "@vue/test-utils": "^2.4.6",
+    "@typescript-eslint/eslint-plugin": "^8.0.1",
+    "@typescript-eslint/parser": "^8.0.1",
+    "autoprefixer": "^10.4.19",
+    "eslint": "^9.9.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "eslint-plugin-vue": "^9.27.0",
+    "happy-dom": "^14.11.2",
+    "postcss": "^8.4.39",
+    "prettier": "^3.3.3",
+    "tailwindcss": "^3.4.10",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.2",
+    "vitest": "^2.0.5",
+    "vue-tsc": "^2.0.29",
+    "@playwright/test": "^1.46.0"
+  }
+}

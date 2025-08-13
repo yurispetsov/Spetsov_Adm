@@ -1,0 +1,27 @@
+<script setup lang="ts">
+/* add to src/components/categories/TreeNode.vue */
+import { moveProductsToCategory } from '@/api/products'
+import { toRefs } from 'vue'
+
+const props = defineProps<{ node: any, level: number, onSelect: (id:string)=>void }>()
+const { node } = toRefs(props)
+
+function onDrop(e: DragEvent){
+  const dt = e.dataTransfer
+  if (!dt) return
+  const raw = dt.getData('application/x-products')
+  if (!raw) return
+  const ids = JSON.parse(raw) as string[]
+  if (!ids.length) return
+  if (!confirm(`Переместить ${ids.length} товаров в «${node.value.name}»?`)) return
+  moveProductsToCategory(ids, node.value.id)
+  // ничего не эмитим — лист справа сам перезагрузится через events
+}
+</script>
+
+<template>
+  <!-- в корневой узел добавить эти обработчики -->
+  <div @dragover.prevent @drop="onDrop">
+    <!-- существующая разметка узла -->
+  </div>
+</template>
