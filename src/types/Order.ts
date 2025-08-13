@@ -1,1 +1,34 @@
-export type ID=string;export type DeliveryType='pickup'|'delivery';export type OrderStatus='new'|'in_progress'|'ready'|'shipped'|'cancelled';export interface OrderItem{sku:string;name:string;qty:number;price:number}export interface Order{id:ID;number1C:string;customerName:string;customerType:'person'|'company';total:number;deliveryType:DeliveryType;pickupStore?:'store1'|'store2';shipAt?:string;status:OrderStatus;items:OrderItem[];code?:string}
+export type DeliveryKind = 'pickup' | 'courier';
+
+export type OrderStatus =
+  | 'new' | 'processing' | 'picking' | 'ready'
+  | 'shipped' | 'done' | 'canceled';
+
+export interface OrderItem {
+  id: string;
+  sku: string;
+  article?: string;
+  name: string;
+  qty: number;
+  price: number; // за единицу
+}
+
+export interface OrderBrief {
+  id: string;
+  oneCNumber: string;        // номер в 1С
+  customerName: string;      // ФИО или Наименование
+  total: number;
+  delivery: DeliveryKind;
+  pickupStoreId?: string;    // если pickup — откуда
+  shipAt?: string;           // дата/время отгрузки ISO
+  status: OrderStatus;
+  updatedAt?: string;
+}
+
+export interface Order extends OrderBrief {
+  comment?: string;
+  code?: string;             // код для получения
+  address?: string;          // для доставки
+  items: OrderItem[];
+  docs?: Array<{ id: string; title: string; url: string }>;
+}
