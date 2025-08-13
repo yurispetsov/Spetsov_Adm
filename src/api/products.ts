@@ -1,139 +1,51 @@
-// src/api/products.ts (DnD/Batch/Edit ready)
-export type ID = string
+import { api } from '@/shared/api/client';
+import type { Product } from '@/types/catalog';
 
-export interface StockByStore { [storeId: string]: number }
-
-export interface AttrKV { name: string; value: string }
-export interface MetricNVU { name: string; value: number; unit: string }
-export interface DocLink { name: string; url: string }
-
-export interface Product {
-  id: ID
-  sku: string
-  article?: string
-  name: string
-  price: number
-  stock: StockByStore
-  categoryId?: string | null
-  active: boolean
-  updatedAt: string
-
-  // extra fields for editor
-  description?: string
-  attributes?: AttrKV[]
-  metrics?: MetricNVU[]
-  documents?: DocLink[]
+export interface ListProductsParams {
+  q?: string;
+  page?: number;
+  perPage?: number;
+  sort?: 'name'|'price'|'stock'|'updated'|'active';
+  categoryId?: string | null;
 }
 
-const KEY = '__mock_products_v2__'
-
-function makeId(): ID {
-  try { return (globalThis as any).crypto?.randomUUID?.() as string } catch {}
-  return 'p' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
+export interface ListProductsResponse {
+  items: Product[];
+  total: number;
 }
-const now = () => new Date().toISOString()
 
-function read(): Product[] {
-  const raw = localStorage.getItem(KEY)
-  if (!raw) {
-    const seed = seedProducts()
-    localStorage.setItem(KEY, JSON.stringify(seed))
-    return seed
+export async function listProducts(params: ListProductsParams = {}): Promise<ListProductsResponse> {
+  const { data } = await api.get<ListProductsResponse>('/products', { params });
+  return data;
+}
+
+export async function getProduct(id: string): Promise<Product> {
+  const { data } = await api.get<Product>(`/products/${id}`);
+  return data;
+}
+
+export async function saveProduct(payload: Partial<Product>): Promise<Product> {
+  if (payload.id) {
+    const { data } = await api.patch<Product>(`/products/${payload.id}`, payload);
+    return data;
   }
-  try { return JSON.parse(raw) as Product[] } catch { return [] }
-}
-function write(arr: Product[]){ localStorage.setItem(KEY, JSON.stringify(arr)) }
-
-function seedProducts(): Product[] {
-  const cats = ['c1','c5','c9']
-  const items: Product[] = []
-  for (let i=1;i<=36;i++){
-    const cat = cats[i % cats.length]
-    items.push({
-      id: makeId(),
-      sku: `SKU-${1000+i}`,
-      article: `ART-${i}`,
-      name: `Товар ${i}`,
-      price: Math.round(900 + i * 37.25),
-      stock: { s1: (i*3)%12, s2: (i*5)%9 },
-      categoryId: cat,
-      active: i%9!==0,
-      updatedAt: now(),
-      description: 'Короткое описание товара ' + i,
-      attributes: [{ name:'Цвет', value: i%2?'Чёрный':'Серый' }],
-      metrics: [{ name:'Вес', value: 1+i%3, unit: 'кг' }],
-      documents: [{ name:'Инструкция', url:'#' }],
-    })
-  }
-  return items
+  const { data } = await api.post<Product>('/products', payload);
+  return data;
 }
 
-export interface Query { q?: string, sort?: 'name'|'price'|'stock'|'updated'|'active' }
-export function listProducts(q: Query = {}): Product[] {
-  let arr = read()
-  const v = (q.q||'').toLowerCase()
-  if (v) arr = arr.filter(p => (p.sku+' '+(p.article||'')+' '+p.name).toLowerCase().includes(v))
-  if (q.sort==='price') arr.sort((a,b)=>a.price-b.price)
-  else if (q.sort==='stock') arr.sort((a,b)=>sumStock(a)-sumStock(b))
-  else if (q.sort==='updated') arr.sort((a,b)=> new Date(b.updatedAt).getTime()-new Date(a.updatedAt).getTime())
-  else if (q.sort==='active') arr.sort((a,b)=> Number(b.active)-Number(a.active) )
-  else arr.sort((a,b)=>a.name.localeCompare(b.name))
-  return arr
+export async function deleteProduct(id: string): Promise<void> {
+  await api.delete(`/products/${id}`);
 }
 
-export function listByCategory(categoryId?: string|null, q: Query = {}): Product[] {
-  let arr = read()
-  if (categoryId) arr = arr.filter(p => p.categoryId===categoryId)
-  const v = (q.q||'').toLowerCase()
-  if (v) arr = arr.filter(p => (p.sku+' '+(p.article||'')+' '+p.name).toLowerCase().includes(v))
-  return arr
+export async function toggleActive(ids: string[], active: boolean): Promise<void> {
+  await api.post('/products:toggle', { ids, active });
 }
 
-export function saveProduct(p: Partial<Product>): Product {
-  const all = read()
-  if (!p.id) {
-    const item: Product = {
-      id: makeId(),
-      sku: p.sku || '',
-      article: p.article || '',
-      name: p.name || '',
-      price: p.price || 0,
-      stock: p.stock || { s1:0, s2:0 },
-      categoryId: p.categoryId || null,
-      active: p.active ?? true,
-      updatedAt: now(),
-      description: p.description || '',
-      attributes: p.attributes || [],
-      metrics: p.metrics || [],
-      documents: p.documents || [],
-    }
-    all.push(item); write(all); return item
-  } else {
-    const i = all.findIndex(x=>x.id===p.id); if (i<0) throw new Error('Not found')
-    const next: Product = { ...all[i], ...p, updatedAt: now() } as Product
-    all[i] = next; write(all); return next
-  }
+export async function moveProductsToCategory(ids: string[], categoryId: string): Promise<void> {
+  await api.post('/products:move', { ids, categoryId });
 }
 
-export function deleteProduct(id: ID){ write(read().filter(p=>p.id!==id)) }
-export function toggleActive(ids: ID[], flag: boolean){
-  const all = read()
-  ids.forEach(id => {
-    const i = all.findIndex(x=>x.id===id)
-    if (i>=0) all[i] = { ...all[i], active: flag, updatedAt: now() }
-  })
-  write(all)
+export function sumStock(p: Product): number {
+  if (!p.stock) return 0;
+  return Object.values(p.stock).reduce((a, b) => a + Number(b || 0), 0);
 }
-
-export function moveProductsToCategory(ids: ID[], categoryId: string|null){
-  const all = read()
-  ids.forEach(id => {
-    const i = all.findIndex(x=>x.id===id)
-    if (i>=0) all[i] = { ...all[i], categoryId, updatedAt: now() }
-  })
-  write(all)
-  // notify listeners (Inspector in categories)
-  try { window.dispatchEvent(new CustomEvent('products-changed')) } catch {}
-}
-
-export function sumStock(p: Product){ return Object.values(p.stock||{}).reduce((a,b)=>a+(b||0),0) }

@@ -1,57 +1,35 @@
 <template>
-  <dialog ref="dlg" class="rounded-xl p-0 w-[640px] max-w-[96vw]">
-    <div class="p-4 border-b flex items-center justify-between sticky top-0 bg-white">
-      <div class="font-medium">Переместить в категорию</div>
-      <button class="opacity-70" @click="close">✕</button>
+  <div v-if="visible" class="fixed inset-0 bg-black/30 flex items-center justify-center z-[70]">
+    <div class="bg-white rounded shadow-lg w-[520px] p-4">
+      <h3 class="text-lg font-semibold mb-3">Переместить в категорию</h3>
+      <div class="max-h-[50vh] overflow-auto">
+        <ul>
+          <li v-for="c in flat" :key="c.id">
+            <button class="w-full text-left px-2 py-1 hover:bg-gray-100 rounded" @click="pick(c.id)">
+              {{ c.name }}
+            </button>
+          </li>
+        </ul>
+      </div>
+      <div class="mt-3 text-right">
+        <button class="px-3 py-2 border rounded" @click="close">Отмена</button>
+      </div>
     </div>
-    <div class="p-4">
-      <input v-model="q" class="border rounded px-3 py-2 w-full mb-3" placeholder="Поиск по категориям..." />
-      <ul class="max-h-[50vh] overflow-auto space-y-1">
-        <li v-for="c in filtered" :key="c.id">
-          <button class="w-full text-left px-3 py-1 rounded hover:bg-gray-100" @click="choose(c.id)">
-            {{ c.path }}
-          </button>
-        </li>
-      </ul>
-    </div>
-    <div class="p-3 border-t text-right">
-      <button class="border rounded px-3 py-2" @click="close">Отмена</button>
-    </div>
-  </dialog>
+  </div>
 </template>
+
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
-import { useCategoriesStore } from '@/stores/categories'
+import { ref, onMounted } from 'vue';
+import { useCategoriesStore } from '@/stores/categories';
 
-const emit = defineEmits(['pick','close'])
-const dlg = ref<HTMLDialogElement|null>(null)
-const q = ref('')
-const store = useCategoriesStore()
+const visible = ref(false);
+const store = useCategoriesStore();
+const flat = store.items;
 
-const flat = computed(()=>{
-  const res: any[] = []
-  function walk(list:any[], prefix:string[]=[]){
-    list.forEach(n=>{
-      const path = [...prefix, n.name]
-      res.push({ id: n.id, path: path.join(' / ') })
-      if (n.children?.length) walk(n.children, path)
-    })
-  }
-  walk((store as any).tree || [])
-  return res
-})
-const filtered = computed(()=>{
-  const v = q.value.toLowerCase()
-  return !v ? flat.value : flat.value.filter(x => x.path.toLowerCase().includes(v))
-})
+function open(){ visible.value = true; if(!store.items.length) store.fetch(); }
+function close(){ visible.value = false; }
+function pick(id: string){ emit('pick', id); close(); }
 
-async function open(){ await nextTick(); dlg.value?.showModal() }
-function close(){ dlg.value?.close(); emit('close') }
-function choose(id: string){ emit('pick', id); close() }
-
-defineExpose({ open, close })
+const emit = defineEmits<{ (e:'pick', categoryId: string): void }>();
+defineExpose({ open, close });
 </script>
-<style>
-dialog::backdrop { background: rgba(0,0,0,.25) }
-dialog { border: 1px solid #eee }
-</style>

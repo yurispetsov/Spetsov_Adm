@@ -1,92 +1,198 @@
+<!-- src/components/orders/OrderDetailsModal.vue -->
 <template>
-  <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-40" @keydown.esc="$emit('close')">
-    <div class="bg-white w-[960px] max-h-[90vh] rounded shadow flex flex-col overflow-hidden">
+  <div v-if="visible" class="fixed inset-0 z-50 flex items-start justify-center bg-black/40">
+    <div class="bg-white rounded shadow-md w-[880px] max-h-[90vh] mt-12 overflow-auto">
       <header class="p-4 border-b flex items-center justify-between">
-        <h2 class="text-lg font-semibold">Заказ № {{ order.oneCNumber }}</h2>
-        <button class="text-gray-500" @click="$emit('close')">✕</button>
+        <h3 class="text-lg font-semibold">Заказ {{ order?.number || '' }}</h3>
+        <button class="text-gray-500" @click="close" aria-label="Закрыть">✕</button>
       </header>
 
-      <div class="p-4 grid grid-cols-2 gap-4 overflow-auto">
-        <div>
-          <div class="text-sm text-gray-500">Клиент</div>
-          <div>{{ order.customerName }}</div>
-          <div class="mt-2 text-sm text-gray-500">Тип</div>
-          <div>{{ order.delivery==='pickup' ? 'Самовывоз' : 'Доставка' }}</div>
-          <div v-if="order.delivery==='pickup' && order.pickupStoreId" class="mt-2">
-            <div class="text-sm text-gray-500">Магазин</div><div>{{ order.pickupStoreId }}</div>
+      <section v-if="order && !loading" class="p-4 space-y-4">
+        <div class="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <div class="text-gray-500">Клиент</div>
+            <div>{{ order.customerName || '—' }}</div>
           </div>
-          <div class="mt-2 text-sm text-gray-500">Статус</div>
-          <div class="flex gap-2 items-center">
-            <select v-model="localStatus" class="border rounded px-2 py-1">
-              <option value="new">Новый</option><option value="processing">В работе</option>
-              <option value="picking">Комплектация</option><option value="ready">Готов</option>
-              <option value="shipped">Отгружен</option><option value="done">Завершён</option>
-              <option value="canceled">Отменён</option>
-            </select>
-            <button class="border rounded px-3 py-1" @click="$emit('set-status', localStatus)">Применить</button>
+          <div>
+            <div class="text-gray-500">Создан</div>
+            <div>{{ dt(order.createdAt) }}</div>
           </div>
-          <div v-if="order.code" class="mt-2 text-sm"><span class="text-gray-500">Код получения:</span> <b>{{ order.code }}</b></div>
-          <div v-if="order.shipAt" class="mt-2 text-sm"><span class="text-gray-500">Отгрузка:</span> {{ new Date(order.shipAt).toLocaleString('ru-RU') }}</div>
+          <div>
+            <div class="text-gray-500">Тип получения</div>
+            <div>{{ order.deliveryType === 'pickup' ? 'Самовывоз' : 'Доставка' }}</div>
+          </div>
+          <div>
+            <div class="text-gray-500">Отгрузка</div>
+            <div>{{ dt(order.deliveryAt) }}</div>
+          </div>
+          <div>
+            <div class="text-gray-500">Статус</div>
+            <div>{{ statusRu(order.status) }}</div>
+          </div>
+          <div>
+            <div class="text-gray-500">Сумма</div>
+            <div class="font-medium">{{ money(order.total) }}</div>
+          </div>
         </div>
 
-        <div>
-          <div class="text-sm text-gray-500 mb-1">Товары</div>
-          <table class="w-full text-sm border">
-            <thead class="bg-gray-50">
-              <tr><th class="p-2 text-left">Наименование</th><th class="p-2 w-16">Кол-во</th><th class="p-2 text-right w-24">Цена</th></tr>
+        <div class="border rounded">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b">
+              <tr>
+                <th class="p-2 text-left">Товар</th>
+                <th class="p-2 text-right w-20">Кол-во</th>
+                <th class="p-2 text-right w-28">Цена</th>
+                <th class="p-2 text-right w-28">Сумма</th>
+              </tr>
             </thead>
             <tbody>
-              <tr v-for="it in order.items" :key="it.id" class="border-t">
-                <td class="p-2">{{ it.name }}</td>
-                <td class="p-2 text-center">{{ it.qty }}</td>
+              <tr v-for="(it, idx) in order.items" :key="idx" class="border-b">
+                <td class="p-2">{{ it.productId }}</td>
+                <td class="p-2 text-right">{{ it.qty }}</td>
                 <td class="p-2 text-right">{{ money(it.price) }}</td>
+                <td class="p-2 text-right">{{ money(it.price * it.qty) }}</td>
               </tr>
             </tbody>
           </table>
-          <div class="mt-2 text-right font-medium">Итого: {{ money(order.total) }}</div>
-          <div class="mt-4 flex gap-2">
-            <button class="border rounded px-3 py-1" @click="printPickList">Печать сборочного листа</button>
-            <a v-for="d in order.docs" :key="d.id" class="underline text-sm" :href="d.url" target="_blank">{{ d.title }}</a>
-          </div>
         </div>
-      </div>
 
-      <footer class="p-4 border-t text-right">
-        <button class="border rounded px-3 py-1" @click="$emit('close')">Закрыть</button>
-      </footer>
+        <div class="flex items-center gap-2">
+          <select v-model="nextStatus" class="border rounded px-3 py-2 text-sm">
+            <option disabled value="">Изменить статус…</option>
+            <option value="paid">Оплачен</option>
+            <option value="packed">Собран</option>
+            <option value="shipped">Отгружен</option>
+            <option value="done">Завершён</option>
+            <option value="canceled">Отменён</option>
+          </select>
+
+          <button class="border rounded px-3 py-2 text-sm" @click="applyStatus" :disabled="!nextStatus">
+            Применить
+          </button>
+
+          <button class="ml-auto border rounded px-3 py-2 text-sm" @click="printPick">
+            Печать сборочного листа
+          </button>
+        </div>
+      </section>
+
+      <section v-else class="p-6 text-center">Загрузка…</section>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
-import type { Order, OrderStatus } from '@/types/order';
+import { ref } from 'vue'
+import type { Order, OrderStatus } from '@/api/orders'
+import { getOrder, updateOrder } from '@/api/orders'
 
-const props = defineProps<{ order: Order }>();
-defineEmits<{ (e:'close'):void; (e:'set-status', s: OrderStatus): void }>();
+const visible   = ref(false)
+const loading   = ref(false)
+const order     = ref<Order | null>(null)
+const nextStatus = ref<OrderStatus | ''>('')
 
-const localStatus = ref<OrderStatus>(props.order.status);
-watch(() => props.order.status, s => localStatus.value = s);
-
-function money(v: number){ return new Intl.NumberFormat('ru-RU', { style:'currency', currency:'RUB', maximumFractionDigits:0 }).format(v); }
-function printPickList(){
-  const html = `
-  <html><head><title>Сборочный лист ${props.order.oneCNumber}</title>
-  <style>body{font-family:system-ui,Segoe UI,Roboto,Arial;padding:24px}
-  table{width:100%;border-collapse:collapse} th,td{border:1px solid #ddd;padding:6px;text-align:left}
-  h1{font-size:18px;margin:0 0 12px} .muted{color:#666}</style></head>
-  <body>
-    <h1>Сборочный лист № ${props.order.oneCNumber}</h1>
-    <div class="muted">Клиент: ${props.order.customerName}</div>
-    <div class="muted">Тип: ${props.order.delivery==='pickup' ? 'Самовывоз' : 'Доставка'}</div>
-    ${props.order.code ? `<div class="muted">Код получения: ${props.order.code}</div>` : ''}
-    <table><thead><tr><th>Наименование</th><th>Кол-во</th><th>Цена</th></tr></thead>
-      <tbody>
-        ${props.order.items.map(i=>`<tr><td>${i.name}</td><td>${i.qty}</td><td style="text-align:right">${i.price}</td></tr>`).join('')}
-      </tbody>
-    </table>
-  </body></html>`;
-  const w=window.open('','_blank'); if(!w) return;
-  w.document.write(html); w.document.close(); w.focus(); w.print();
+/** Открыть модалку и загрузить заказ */
+async function open(id: string) {
+  visible.value = true
+  loading.value = true
+  nextStatus.value = ''
+  try {
+    order.value = await getOrder(id)
+  } finally {
+    loading.value = false
+  }
 }
+
+/** Закрыть модалку и очистить состояние */
+function close() {
+  visible.value = false
+  order.value = null
+  nextStatus.value = ''
+}
+
+/** Применить новый статус */
+async function applyStatus() {
+  if (!order.value || !nextStatus.value) return
+  const data = await updateOrder(order.value.id, { status: nextStatus.value })
+  order.value = data
+  nextStatus.value = ''
+}
+
+/** Печать сборочного листа (без <script> в шаблонной строке!) */
+function printPick() {
+  if (!order.value) return
+
+  const w = window.open('', '_blank', 'width=900,height=700')
+  if (!w) return
+
+  const rows = (order.value.items || [])
+    .map(i => `<tr><td>${escapeHtml(String(i.productId))}</td><td class="num">${i.qty}</td></tr>`)
+    .join('')
+
+  const html =
+    `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Сборочный лист ${escapeHtml(String(order.value.number))}</title>
+  <style>
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial;padding:16px}
+    h2{margin:0 0 12px}
+    table{border-collapse:collapse;width:100%}
+    th,td{border:1px solid #000;padding:6px 8px;font-size:13px}
+    th{text-align:left;background:#f3f3f3}
+    td.num{text-align:right}
+  </style>
+</head>
+<body>
+  <h2>Сборочный лист ${escapeHtml(String(order.value.number))}</h2>
+  <p><strong>Клиент:</strong> ${escapeHtml(order.value.customerName || '—')}</p>
+  <table>
+    <thead><tr><th>Товар</th><th style="width:120px;text-align:right">Кол-во</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+</body>
+</html>`;
+
+  w.document.open()
+  w.document.write(html)
+  w.document.close()
+  w.focus()
+  // Печать запускаем из окна, чтобы не вставлять <script> в строку.
+  w.onload = () => { try { w.print() } catch (_) {} }
+}
+
+/* ————— Утилиты ————— */
+
+function money(v: number) {
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB',
+    maximumFractionDigits: 0,
+  }).format(v || 0)
+}
+
+function dt(iso?: string | null) {
+  return iso ? new Date(iso).toLocaleString('ru-RU') : '—'
+}
+
+const STATUS_RU: Record<OrderStatus, string> = {
+  new: 'Новый',
+  paid: 'Оплачен',
+  packed: 'Собран',
+  shipped: 'Отгружен',
+  done: 'Завершён',
+  canceled: 'Отменён',
+}
+
+function statusRu(s: OrderStatus) {
+  return STATUS_RU[s] ?? s
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]!))
+}
+
+/** Экспорт методов модалки наружу (для страницы заказов) */
+defineExpose({ open, close })
 </script>

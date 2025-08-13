@@ -1,120 +1,59 @@
-// src/stores/categories.ts
-import { defineStore } from 'pinia'
-import type { Category, ID } from '@/types/Category'
-import { listCategories, createCategory, updateCategory, deleteCategory, moveCategory, slugify } from '@/api/categories'
+import { defineStore } from 'pinia';
+import { listCategories, createCategory, updateCategory, deleteCategory } from '@/api/categories';
+import type { Category } from '@/types/catalog';
 
-export interface TreeNode extends Category {
-  children: TreeNode[]
-}
-
-function buildTree(flat: Category[], search: string) {
-  const byId = new Map<string, TreeNode>()
-  const roots: TreeNode[] = []
-  const q = search.trim().toLowerCase()
-
-  for (const c of flat) {
-    const node: TreeNode = { ...c, children: [] }
-    byId.set(c.id, node)
+function toTree(items: Category[]): any[] {
+  const byParent: Record<string, Category[]> = {};
+  for (const c of items) {
+    const k = c.parentId || 'root';
+    (byParent[k] ||= []).push(c);
   }
-
-  for (const c of flat) {
-    const node = byId.get(c.id)!
-    if (c.parentId) {
-      byId.get(c.parentId)?.children.push(node)
-    } else {
-      roots.push(node)
-    }
-  }
-
-  const sortNodes = (arr: TreeNode[]) => {
-    arr.sort((a,b)=> (a.sort - b.sort) || a.name.localeCompare(b.name))
-    arr.forEach(n => sortNodes(n.children))
-  }
-  sortNodes(roots)
-
-  // фильтрация по поиску — показываем ветви, где встречается запрос
-  if (q) {
-    function match(node: TreeNode): boolean {
-      const here = node.name.toLowerCase().includes(q) || node.slug.toLowerCase().includes(q)
-      const childMatch = node.children.some(match)
-      node.isVisible = node.isVisible // no-op just to touch type
-      return here || childMatch
-    }
-    const filtered: TreeNode[] = []
-    for (const r of roots) if (match(r)) filtered.push(r)
-    return filtered
-  }
-
-  return roots
+  const build = (pid: string|null): any[] => {
+    const arr = byParent[pid || 'root'] || [];
+    return arr.sort((a,b)=>a.sort-b.sort).map(n => ({ node: n, children: build(n.id) }));
+  };
+  return build(null);
 }
 
 export const useCategoriesStore = defineStore('categories', {
   state: () => ({
-    flat: [] as Category[],
-    search: '',
-    expanded: new Set<string>() as Set<string>,
+    items: [] as Category[],
     selectedId: null as string | null,
-    loading: false,
+    loading: false as boolean,
   }),
   getters: {
-    tree(state): TreeNode[] {
-      return buildTree(state.flat, state.search)
-    },
+    tree(state): any[] { return toTree(state.items); },
     selected(state): Category | null {
-      return state.flat.find(c => c.id === state.selectedId) || null
+      return state.items.find(x => x.id === state.selectedId) || null;
     }
   },
   actions: {
     async fetch() {
-      this.loading = true
+      this.loading = true;
       try {
-        this.flat = await listCategories()
-        if (!this.selectedId && this.flat.length) this.selectedId = this.flat[0].id
+        this.items = await listCategories();
+        if (this.selectedId && !this.items.find(x=>x.id===this.selectedId)) this.selectedId = null;
       } finally {
-        this.loading = false
+        this.loading = false;
       }
     },
-    load() { return (this as any).fetch?.() },
-    setSearch(q: string) { this.search = q },
-    setSelected(id: string | null) { this.selectedId = id },
-    toggleExpand(id: string) {
-      if (this.expanded.has(id)) this.expanded.delete(id); else this.expanded.add(id)
+    select(id: string | null) {
+      this.selectedId = id;
     },
-    expandAll() {
-      this.expanded = new Set(this.flat.map(c => c.id))
+    async create(payload: Partial<Category>) {
+      const c = await createCategory(payload);
+      this.items.push(c);
+      this.selectedId = c.id;
     },
-    collapseAll() {
-      this.expanded = new Set()
+    async update(id: string, payload: Partial<Category>) {
+      const c = await updateCategory(id, payload);
+      const i = this.items.findIndex(x => x.id === id);
+      if (i >= 0) this.items[i] = c;
     },
-    async createRoot() {
-      const item = await createCategory({ name: 'Новая категория', parentId: null, isVisible: true })
-      await this.fetch()
-      this.selectedId = item.id
-      this.expanded.add(item.id)
-    },
-    async createChild(parentId: string) {
-      const item = await createCategory({ name: 'Новая подкатегория', parentId, isVisible: true })
-      await this.fetch()
-      this.selectedId = item.id
-      this.expanded.add(parentId)
-    },
-    async saveCategory(id: string, patch: Partial<Category>) {
-      await updateCategory(id, patch)
-      await this.fetch()
-      this.selectedId = id
-    },
-    async removeCategory(id: string) {
-      await deleteCategory(id)
-      await this.fetch()
-      if (!this.selectedId || !this.flat.find(c => c.id === this.selectedId)) {
-        this.selectedId = this.flat[0]?.id || null
-      }
-    },
-    async move(payload: { id: string; newParentId: string | null; newIndex?: number }) {
-      await moveCategory(payload)
-      await this.fetch()
-      if (payload.newParentId) this.expanded.add(payload.newParentId)
-    },
-    slugify,
+    async remove(id: string) {
+      await deleteCategory(id);
+      this.items = this.items.filter(x => x.id !== id);
+      if (this.selectedId === id) this.selectedId = null;
+    }
   }
-})
+});
